@@ -1,0 +1,183 @@
+esphome:
+  name: barcode-scanner
+  friendly_name: Barcode Scanner
+  platformio_options:
+    upload_speed: 921600
+
+external_components:
+  - source: github://pr#7672
+    components:
+      - audio
+      - speaker
+      - i2s_audio
+
+esp32:
+  board: esp32-s3-devkitc-1
+  variant: esp32s3
+  framework:
+    type: esp-idf
+
+psram:
+  mode: octal
+
+# Enable logging
+logger:
+  level: DEBUG
+
+# Enable Home Assistant API
+api:
+  password: ""
+
+http_request:
+  timeout: 30s
+  verify_ssl: false
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Barcode-Scanner Fallback Hotspot"
+    password: !secret hotspot_password
+
+captive_portal:
+
+i2s_audio:
+  i2s_lrclk_pin: 42
+  i2s_bclk_pin: 41
+
+spi:
+  id: quad_spi
+  type: quad
+  clk_pin: 47
+  data_pins:
+    - 18
+    - 7
+    - 48
+    - 5
+
+uart:
+  id: scanner_uart
+  tx_pin: 43
+  rx_pin: 44
+  baud_rate: 9600
+  debug:
+    direction: BOTH
+    dummy_receiver: true
+    after:
+      delimiter: "\r"
+    sequence:
+      - lambda: |-
+          UARTDebug::log_string(direction, bytes);
+          std::string str(bytes.begin(), std::prev(bytes.end()));
+          id(internal_barcode).publish_state(str.c_str());
+
+display:
+  - platform: qspi_dbi
+    model: RM67162
+    id: display_id
+    dimensions:
+      height: 240
+      width: 536
+    transform:
+      mirror_x: true
+      swap_xy: true
+    color_order: rgb
+    brightness: 255
+    cs_pin: 6
+    reset_pin: 17
+    enable_pin: 38
+    update_interval: never
+    auto_clear_enabled: false
+
+speaker:
+  - platform: i2s_audio
+    id: speaker_id
+    dac_type: external
+    i2s_dout_pin: 40
+    channel: mono
+    bits_per_sample: 16bit
+    sample_rate: 16000
+
+media_player:
+  - platform: speaker
+    name: "Media Player"
+    speaker: speaker_id
+    sample_rate: 16000
+    files:
+      - id: beep_of_a_cash_register
+        file: sounds/beep_of_a_cash_register.flac
+
+lvgl:
+  msgboxes:
+    - id: error_message
+      title: "Error"
+      body:
+        text: "Failed downloading image"
+        text_color: white
+  pages:
+    - id: idle
+      bg_color: black
+    - id: loading
+      bg_color: black
+      widgets:
+        - spinner:
+            align: center
+            spin_time: 2s
+            arc_length: 60deg
+    - id: product
+      widgets:
+        - image:
+            id: display_product_image
+            src: product_image
+
+text_sensor:
+  - platform: template
+    id: internal_barcode
+    on_value:
+      then:
+        - speaker_media_player.play_local_media_file: beep_of_a_cash_register
+        - lvgl.page.show: loading
+        - lambda: id(barcode).publish_state(x.c_str());
+        - delay: 1s
+        - lambda: id(barcode).publish_state("unknown");
+        - delay: 60s
+        - lvgl.page.show: idle
+  - platform: template
+    id: barcode
+    name: "Barcode"
+
+text:
+  - platform: template
+    name: "Product Image URL"
+    icon: mdi:image
+    optimistic: true
+    mode: text
+    on_value:
+      - online_image.set_url:
+          id: product_image
+          url: !lambda return x.c_str();
+
+online_image:
+  - url: "http://placeholder.png"
+    id: product_image
+    format: png
+    type: RGB565
+    on_download_finished:
+      then:
+        - lvgl.image.update:
+            id: display_product_image
+            src: product_image
+        - lvgl.page.show: product
+        - delay: 5s
+        - lvgl.page.show: idle
+    on_error:
+        - lvgl.widget.show: error_message
+        - delay: 5s
+        - lvgl.widget.hide: error_message
+        - lvgl.page.show: idle
