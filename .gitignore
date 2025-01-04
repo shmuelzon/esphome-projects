@@ -1,0 +1,10 @@
+# Outputs
+/.esphome/
+
+# General
+venv
+*.swp
+*.swo
+
+# Sensitive files
+/secrets.yaml
