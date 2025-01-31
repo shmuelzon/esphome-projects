@@ -1,0 +1,115 @@
+esphome:
+  name: doorbell
+  friendly_name: Doorbell
+  platformio_options:
+    upload_speed: 921600
+
+external_components:
+  - source: github://pr#7672
+    components:
+      - audio
+      - speaker
+      - i2s_audio
+
+esp32:
+  board: esp32-s3-devkitc-1
+  variant: esp32s3
+  framework:
+    type: esp-idf
+
+psram:
+  mode: octal
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  password: ""
+
+http_request:
+  timeout: 30s
+  verify_ssl: false
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Doorbell Fallback Hotspot"
+    password: !secret hotspot_password
+
+captive_portal:
+
+mqtt:
+  broker: !secret mqtt_broker
+  discovery: false
+
+i2s_audio:
+  i2s_lrclk_pin: 44
+  i2s_bclk_pin: 7
+
+speaker:
+  - platform: i2s_audio
+    id: speaker_id
+    dac_type: external
+    i2s_dout_pin: 8
+    channel: mono
+    bits_per_sample: 16bit
+    sample_rate: 48000
+
+media_player:
+  - platform: speaker
+    id: speaker_media_player
+    name: "Media Player"
+    speaker: speaker_id
+    sample_rate: 48000
+    files:
+      - id: ding_dong
+        file: sounds/ding_dong.flac
+      - id: anybody_home
+        file: sounds/anybody_home.flac
+
+select:
+  - platform: template
+    id: audio_file
+    name: "Audio file"
+    optimistic: true
+    options:
+      - "Ding Dong"
+      - "Anybody Home?"
+    restore_value: true
+    initial_option: "Ding Dong"
+
+button:
+  - platform: template
+    name: "Ring bell"
+    on_press:
+      then:
+        - script.execute: play_audio
+
+binary_sensor:
+  - platform: gpio
+    name: "Button"
+    pin:
+      number: 1
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+    filters:
+      - delayed_on: 10ms
+    on_press:
+      then:
+        - script.execute: play_audio
+
+script:
+  - id: play_audio
+    then:
+      - lambda: |-
+          id(speaker_media_player).play_file(id(audio_file).state == "Ding Dong" ? id(ding_dong) : id(anybody_home), false);

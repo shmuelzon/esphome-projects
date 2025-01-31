@@ -14,3 +14,4 @@ The directory structure is as follows:
 | Image | Description | Documentation |
 | ----- |:----:|:----:|
 | [<img src="./doc/barcode_scanner/barcode_scanner.jpg">](./doc/barcode_scanner#readme) | Barcode Scanner that automatically add items to groceries list while displaying an image of the product and calling out it's name | [Documentation](./doc/barcode_scanner#readme) |
+| [<img src="./doc/doorbell/doorbell.jpg">](./doc/doorbell#readme) | Doorbell with customizable audio tracks and media player for HA text-to-speech | [Documentation](./doc/doorbell#readme) |
